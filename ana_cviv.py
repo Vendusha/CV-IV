@@ -97,6 +97,15 @@ def plot_cvf(data_frequency):
         plt.ylabel("Capacitance [A]")
         plt.legend()
         plt.show()
+
+        plt.figure()
+        for freq in data_frequency:
+            plt.plot(freq.v_bias, 1/(freq.c**2),
+                     label=freq.frequency)
+        plt.xlabel("$V_{Bias}$ [V]")
+        plt.ylabel("1/C^2 [A]")
+        plt.legend()
+
     except NameError:
         print("CVF measurements not found.")
         plt.close()
