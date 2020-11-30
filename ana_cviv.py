@@ -54,7 +54,6 @@ try:
     plt.plot(V_bias, I_pad, label="sample_graph_label")
     plt.xlabel("V_B [V]")
     plt.ylabel("I_{pad} [A]")
-    # plt.show()
     plt.figure()
     plt.plot(V_gate, I_pad)
     plt.xlabel("V_B [V]")
