@@ -3,9 +3,66 @@
 from collections import namedtuple
 import numpy as np
 import matplotlib.pyplot as plt
-
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
 from matplotlib import rc
+import pdb
 rc('text', usetex=True)
+
+
+def n_eff_fcn(v_depletion, d_thickness):
+    """Calculates the effective doping of a silicon sample.
+    Returns the doping in 10**(-7).
+    """
+    epsilon_0 = 8.8541878128  # 10^{-12} F m^(-1)
+    epsilon_si = 11.68  # relative permitivity
+    q_0 = 1.602  # in 10^(-19)
+    return np.abs(2*epsilon_si*epsilon_0**2*v_depletion/(q_0*d_thickness**2))
+
+
+def check_breakdown(v_det, capacitance, i_det):
+    """Finds the point of breakdown accoring to https:/
+    /cds.cern.ch/record/2281851/files/PabloMatorras2017.pdf
+    """
+    for i in range(1, len(i_det)):
+        k_bd = (i_det[i]-i_det[i-1])/(v_det[i]-v_det[i-1])*(v_det[i]/i_det[i])
+        if k_bd > 4:
+            i_det = i_det[:i-1]
+            v_det = v_det[:i-1]
+            capacitance = capacitance[:i-1]
+            break
+    return v_det, capacitance
+
+
+def dep_voltage(v_det, capacitance, i_det):
+    """finds the depletion voltage, based on https:/
+    /stackoverflow.com/questions/29382903
+    /how-to-apply-piecewise-linear-fit-in-python?rq=1
+    """
+    v_det, capacitance = check_breakdown(v_det, capacitance, i_det)
+    # extract depletion voltage
+    dys = np.gradient(1/capacitance**2, v_det)
+    rgr = DecisionTreeRegressor(max_leaf_nodes=2)  # fitting two segments
+    rgr.fit(v_det.reshape(-1, 1), dys.reshape(-1, 1))
+    dys_dt = rgr.predict(v_det.reshape(-1, 1)).flatten()
+    ys_sl = np.ones(len(v_det)) * np.nan
+    coeff = []
+    for item in np.unique(dys_dt):
+        msk = dys_dt == item
+        lin_reg = LinearRegression()
+        lin_reg.fit(v_det[msk].reshape(-1, 1),
+                    (1/capacitance**2)[msk].reshape(-1, 1))
+        ys_sl[msk] = lin_reg.predict(v_det[msk].reshape(-1, 1)).flatten()
+        coeff.extend([lin_reg.coef_[0], lin_reg.intercept_[0]])
+        # uncertainty.append
+        # print(lin_reg._residues)
+        # plt.plot([v_det[msk][0], v_det[msk][-1]],
+        #        # [ys_sl[msk][0], ys_sl[msk][-1]],
+        #        # color='r', zorder=1)
+    v_depletion = np.abs((coeff[1]-coeff[3])/(coeff[0]-coeff[2]))
+    # read_cviv.plot_cv(v_det, 1/capacitance**2, "test", v_dep)
+    plt.show()
+    return v_depletion
 
 
 def read_iv(filename):
@@ -75,52 +132,79 @@ def plot_iv(v_b, _v_g, i_p, graph_label):
 def plot_cv(v_d, capacitance, graph_label, v_dep=0):
     """Plotting of the CV characteristics
     """
-    # try:
+    _fig, (axis1, axis2) = plt.subplots(1, 2)
+    axis1.plot(v_d, capacitance,
+               label=str(graph_label))
+    axis1.set_xlabel("$V_{det}$ [V]")
+    axis1.set_ylabel("C [pF]")
+    axis1.legend()
 
-    _fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.plot(v_d, capacitance,
-             label=str(graph_label))
-    ax1.set_xlabel("$V_{det}$ [V]")
-    ax1.set_ylabel("C [pF]")
-    ax1.legend()
-
-    ax2.plot(v_d, 1/(capacitance**2),
-             label=str(graph_label))
-    ax2.set_xlabel("$V_{det}$ [V]")
-    ax2.set_ylabel("1/C$^2$ [pF$^{-1}$)]")
+    axis2.plot(v_d, 1/(capacitance**2),
+               label=str(graph_label))
+    axis2.set_xlabel("$V_{det}$ [V]")
+    axis2.set_ylabel("1/C$^2$ [pF$^{-1}$)]")
     if v_dep != 0:
-        ax2.axvline(v_dep, ymin=0.8, ymax=0.95, color='r', label="$v_{dep}$")
+        axis2.axvline(v_dep, ymin=0.8, ymax=0.95,
+                        color='r', label="$v_{dep}$")
 
-    ax2.legend()
-
-    # except NameError:
-    #     print("CV measurements not found.")
-    #     plt.close()
+    axis2.legend()
 
 
-def plot_cvf(data_frequency, graph_label):
+def plot_cvf(data, graph_label, i_pad, thickness):
     """Plotting of the CVF characteristics
     """
-    try:
+    frequency_array = []
+    v_dep_array = []
+    n_eff = []
+    n_total = len(data)
+    cols = 2
+    rows = int(n_total/cols)
+    if n_total % cols > 0:
+        rows += 1
+    position = range(1, n_total + 1)
+    axis = [None]*n_total
+    fig = plt.figure(1)
+    column = 1
+    row = 0
+    for index, frequency in enumerate(data):
+        if cols % column == 0:
+            column = 1
+            row += 1
+        else:
+            column += 1
+        v_dep = dep_voltage(frequency.v_det, frequency.c, i_pad)
+        # plot_cv(frequency.v_det, frequency.c, graph_label
+        # + " "+str(frequency.frequency)+" Hz", v_dep)
+        axis[index] = fig.add_subplot(row-1, column-1, position[index])
+        print(rows-1, cols-1, position [index])
+        axis[index].plot(frequency.v_det, 1/(frequency.c**2),
+                  label=str(graph_label)+str(frequency.frequency)+" Hz")
+        axis[index].set_xlabel("$V_{det}$ [V]")
+        axis[index].set_ylabel("1/C$^2$ [pF$^{-1}$)]")
+        if v_dep != 0:
+            axis[index].axvline(v_dep, ymin=0.8, ymax=0.95,
+                         color='r', label="$v_{dep}$")
+        
+        frequency_array.append(frequency.frequency)
+        n_eff.append(n_eff_fcn(v_dep, thickness))
+        v_dep_array.append(v_dep)
+        # pdb.set_trace()
+    # plt.legend()
+    print(v_dep_array)
+    print(frequency_array)
+    print(n_eff)
+    plt.show()
 
-        _fig, (ax1, ax2) = plt.subplots(1, 2)
-        # fig.suptitle('Horizontally stacked subplots')
-        # ax1.plot(x, y)
-        # ax2.plot(x, -y)
-        for freq in data_frequency:
-            ax1.plot(freq.v_det, freq.c*10**(12),
-                     label=str(freq.frequency)+" Hz")
-        ax1.set_xlabel("$V_{det}$ [V]")
-        ax1.set_ylabel("C [pF]")
-        ax1.legend()
+    # plt.figure()
+    # plt.plot(frequency_array, v_dep_array, 'x')
+    # plt.ylabel("$V_{dep}$ [V]")
+    # plt.xlabel("Frequency [Hz]")
+    # plt.yscale("log")
+    # plt.figure()
+    # plt.plot(frequency_array, n_eff, 'x')
+    # plt.ylabel("$V_{dep}$ [V]")
+    # plt.xlabel("Frequency [Hz]")
+    # plt.yscale("log")
+    # plt.show()
 
-        for freq in data_frequency:
-            ax2.plot(freq.v_det, 1/((freq.c*10**(12))**2),
-                     label=str(freq.frequency)+" Hz "+str(graph_label))
-        ax2.set_xlabel("$V_{det}$ [V]")
-        ax2.set_ylabel("1/C$^2$ [pF$^{-1}$)]")
-        ax2.legend()
-
-    except NameError:
-        print("CVF measurements not found.")
-        plt.close()
+    return frequency_array, n_eff, v_dep
