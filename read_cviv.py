@@ -61,7 +61,7 @@ def dep_voltage(v_det, capacitance, i_det):
         #        # color='r', zorder=1)
     v_depletion = np.abs((coeff[1]-coeff[3])/(coeff[0]-coeff[2]))
     # read_cviv.plot_cv(v_det, 1/capacitance**2, "test", v_dep)
-    plt.show()
+    # plt.show()
     return v_depletion
 
 
@@ -146,7 +146,6 @@ def plot_cv(v_d, capacitance, graph_label, v_dep=0):
     if v_dep != 0:
         axis2.axvline(v_dep, ymin=0.8, ymax=0.95,
                         color='r', label="$v_{dep}$")
-
     axis2.legend()
 
 
@@ -156,55 +155,41 @@ def plot_cvf(data, graph_label, i_pad, thickness):
     frequency_array = []
     v_dep_array = []
     n_eff = []
-    n_total = len(data)
-    cols = 2
+    n_total = len(data) + 2
+    cols = 3
     rows = int(n_total/cols)
     if n_total % cols > 0:
         rows += 1
     position = range(1, n_total + 1)
-    axis = [None]*n_total
-    fig = plt.figure(1)
-    column = 1
-    row = 0
+    # fig = plt.figure()
+    fig = plt.figure(figsize=(15, 6))
+    plt.title(label=str(graph_label))
     for index, frequency in enumerate(data):
-        if cols % column == 0:
-            column = 1
-            row += 1
-        else:
-            column += 1
         v_dep = dep_voltage(frequency.v_det, frequency.c, i_pad)
         # plot_cv(frequency.v_det, frequency.c, graph_label
         # + " "+str(frequency.frequency)+" Hz", v_dep)
-        axis[index] = fig.add_subplot(row-1, column-1, position[index])
-        print(rows-1, cols-1, position [index])
-        axis[index].plot(frequency.v_det, 1/(frequency.c**2),
-                  label=str(graph_label)+str(frequency.frequency)+" Hz")
-        axis[index].set_xlabel("$V_{det}$ [V]")
-        axis[index].set_ylabel("1/C$^2$ [pF$^{-1}$)]")
+        axis = fig.add_subplot(rows, cols, position[index])
+        axis.plot(frequency.v_det, 1/(frequency.c**2),
+                  label=str(frequency.frequency)+" Hz")
+        axis.set_xlabel("$V_{det}$ [V]")
+        axis.set_ylabel("1/C$^2$ [F$^{-1}$)]")
         if v_dep != 0:
-            axis[index].axvline(v_dep, ymin=0.8, ymax=0.95,
+            axis.axvline(v_dep, ymin=0.8, ymax=0.95,
                          color='r', label="$v_{dep}$")
-        
         frequency_array.append(frequency.frequency)
-        n_eff.append(n_eff_fcn(v_dep, thickness))
-        v_dep_array.append(v_dep)
-        # pdb.set_trace()
-    # plt.legend()
-    print(v_dep_array)
-    print(frequency_array)
-    print(n_eff)
+        n_eff.append(n_eff_fcn(v_dep, thickness)[0])
+        v_dep_array.append(v_dep[0])
+    axis = fig.add_subplot(rows, cols, position[n_total-2])
+    axis.plot(frequency_array, v_dep_array, 'x',
+              label=str(graph_label))
+    axis.set_ylabel("$V_{dep}$ [V]")
+    axis.set_xlabel("Frequency [Hz]")
+    axis = fig.add_subplot(rows, cols, position[n_total-1])
+    axis.plot(frequency_array, n_eff, 'x',
+              label=str(graph_label))
+    axis.set_ylabel("Doping concentration [$10^7$] atoms")
+    axis.set_xlabel("Frequency [Hz]")
+    plt.legend()
+    plt.savefig(str(graph_label)+"CVF.png")
     plt.show()
-
-    # plt.figure()
-    # plt.plot(frequency_array, v_dep_array, 'x')
-    # plt.ylabel("$V_{dep}$ [V]")
-    # plt.xlabel("Frequency [Hz]")
-    # plt.yscale("log")
-    # plt.figure()
-    # plt.plot(frequency_array, n_eff, 'x')
-    # plt.ylabel("$V_{dep}$ [V]")
-    # plt.xlabel("Frequency [Hz]")
-    # plt.yscale("log")
-    # plt.show()
-
     return frequency_array, n_eff, v_dep
