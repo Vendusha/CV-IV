@@ -6,8 +6,22 @@ import matplotlib.pyplot as plt
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.linear_model import LinearRegression
 from matplotlib import rc
-import pdb
 rc('text', usetex=True)
+
+
+def find_start(file_name):
+    """Finds the "BEGIN" line.
+    """
+    line_no = 0
+    with open(file_name, 'r') as read_obj:
+        for num, line in enumerate(read_obj):
+            if "BEGIN" in line:
+                line_no = num+1
+                break
+    try:
+        return line_no
+    except NameError:
+        print("String BEGIN not found in file.")
 
 
 def n_eff_fcn(v_depletion, d_thickness):
@@ -68,7 +82,8 @@ def dep_voltage(v_det, capacitance, i_det):
 def read_iv(filename):
     """read the files IV extension, returns the bias, total current and pad current
     """
-    data = np.genfromtxt(filename, dtype=float, skip_header=65,
+    no_line_start = find_start(filename)
+    data = np.genfromtxt(filename, dtype=float, skip_header=no_line_start,
                          skip_footer=1, unpack=True)
     return data
 
@@ -77,7 +92,8 @@ def read_cv(filename):
     """read the files IV extension, returns the detector Voltage, Capacitance,
     Conductivity, Bias and Current in Power Supply
     """
-    data = np.genfromtxt(filename, dtype=float, skip_header=70,
+    no_line_start = find_start(filename)
+    data = np.genfromtxt(filename, dtype=float, skip_header=no_line_start,
                          skip_footer=1, unpack=True)
     return data
 
@@ -86,7 +102,8 @@ def read_cvf(filename):
     """read the files IV extension, returns the detector Voltage, Capacitance,
     Conductivity, Bias and Current in Power Supply
     """
-    data = np.genfromtxt(filename, dtype=float, skip_header=76,
+    no_line_start = find_start(filename)
+    data = np.genfromtxt(filename, dtype=float, skip_header=no_line_start,
                          skip_footer=1, unpack=True)
     frequency_object = namedtuple("Frequency_object",
                                   'v_det, frequency,c, sigma, v_bias, i_ps')
@@ -145,7 +162,7 @@ def plot_cv(v_d, capacitance, graph_label, v_dep=0):
     axis2.set_ylabel("1/C$^2$ [pF$^{-1}$)]")
     if v_dep != 0:
         axis2.axvline(v_dep, ymin=0.8, ymax=0.95,
-                        color='r', label="$v_{dep}$")
+                      color='r', label="$v_{dep}$")
     axis2.legend()
 
 
@@ -161,7 +178,6 @@ def plot_cvf(data, graph_label, i_pad, thickness):
     if n_total % cols > 0:
         rows += 1
     position = range(1, n_total + 1)
-    # fig = plt.figure()
     fig = plt.figure(figsize=(15, 6))
     plt.title(label=str(graph_label))
     for index, frequency in enumerate(data):
